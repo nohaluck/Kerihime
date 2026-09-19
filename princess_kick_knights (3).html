@@ -1,0 +1,1987 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Princess Kick Knights - けり姫風2D物理アクションRPG</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800;900&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      background-color: #030712;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      overscroll-behavior-y: none;
+    }
+    canvas {
+      display: block;
+      touch-action: none;
+      -webkit-touch-callout: none;
+    }
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .neon-glow-amber {
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+    }
+    .neon-glow-cyan {
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .animate-pulse-ring {
+      animation: pulse-ring 1.5s infinite ease-in-out;
+    }
+    @keyframes alert-flash {
+      0%, 100% { background-color: rgba(220, 38, 38, 0.2); }
+      50% { background-color: rgba(220, 38, 38, 0.6); }
+    }
+    .animate-alert {
+      animation: alert-flash 0.8s infinite;
+    }
+
+    #portraitWarning {
+      display: none;
+    }
+    @media screen and (orientation: portrait) {
+      #portraitWarning {
+        display: flex !important;
+      }
+    }
+  </style>
+</head>
+<body class="text-white flex flex-col items-center justify-center min-h-screen overflow-hidden select-none">
+
+  <!-- Portrait Warning Overlay -->
+  <div id="portraitWarning" class="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+    <div class="text-6xl mb-6 animate-bounce">📱🔄</div>
+    <h2 class="text-2xl sm:text-3xl font-black text-amber-400 mb-3 tracking-widest">端末を横にしてください</h2>
+    <p class="text-slate-300 text-sm sm:text-base font-bold leading-relaxed">
+      画面全体を使った大迫力のゲーム体験のため、<br>
+      スマートフォンを横向きにしてプレイしてください。
+    </p>
+  </div>
+
+  <!-- Header Stats UI -->
+  <header class="absolute top-0 left-0 right-0 p-3 sm:p-4 flex justify-between items-center z-20 pointer-events-none">
+    <div class="flex items-center space-x-2 sm:space-x-3 pointer-events-auto">
+      <!-- Coin Counter -->
+      <div class="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-amber-300 border border-amber-500/40 shadow-lg flex items-center gap-1.5 sm:gap-2">
+        <span class="text-base sm:text-xl">🪙</span>
+        <span id="globalCoins" class="text-sm sm:text-lg tracking-wide">0</span>
+      </div>
+
+      <!-- Crown Counter -->
+      <div id="crownCounter" class="hidden glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-amber-400 border border-amber-400/40 shadow-lg flex items-center gap-1.5 sm:gap-2">
+        <span class="text-base sm:text-xl">👑</span>
+        <span id="stageCrownsText" class="text-sm sm:text-lg">0 / 0</span>
+      </div>
+
+      <!-- Stage & Battle Badge -->
+      <div id="gameStageBadge" class="hidden glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-xs sm:text-sm text-cyan-300 border border-cyan-500/40 shadow-lg flex items-center gap-2">
+        <span>STAGE <span id="currentStageText">1-1</span></span>
+        <span class="bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded-lg border border-cyan-400/30 text-[10px]" id="currentBattleText">BATTLE 1/3</span>
+      </div>
+    </div>
+
+    <!-- Minimap Progress Bar -->
+    <div id="progressBarContainer" class="hidden flex-1 max-w-xs mx-2 sm:mx-4 glass-panel px-3 py-1.5 rounded-2xl border border-white/10 flex flex-col gap-1 pointer-events-auto">
+      <div class="flex justify-between text-[10px] text-slate-300 font-bold px-1">
+        <span>👸 姫</span>
+        <span class="text-amber-300">🎯 GOAL</span>
+      </div>
+      <div class="w-full bg-slate-950/80 rounded-full h-2 overflow-hidden relative border border-white/10">
+        <div id="heroProgressMarker" class="absolute top-0 bottom-0 w-2.5 bg-gradient-to-r from-amber-400 to-rose-500 rounded-full shadow-[0_0_8px_rgba(244,63,94,0.8)] transition-all duration-75"></div>
+      </div>
+    </div>
+
+    <!-- Right Buttons -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <button id="partyBtn" class="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-xs sm:text-sm text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/20 active:scale-95 transition-all shadow-lg flex items-center gap-1.5">
+        <span>🛡️</span>
+        <span>編成</span>
+      </button>
+      <button id="storeBtn" class="glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-xs sm:text-sm text-amber-300 border border-amber-500/40 hover:bg-amber-500/20 active:scale-95 transition-all shadow-lg flex items-center gap-1.5">
+        <span>🛒</span>
+        <span>ショップ</span>
+      </button>
+      <button id="homeBtn" class="hidden glass-panel px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl font-black text-xs sm:text-sm text-slate-300 border border-slate-600 hover:bg-slate-800 active:scale-95 transition-all shadow-lg flex items-center gap-1">
+        <span>🗺️</span>
+        <span>マップ</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Boss HP Bar -->
+  <div id="bossBarContainer" class="hidden absolute top-16 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-md glass-panel p-2.5 rounded-2xl border border-red-500/40 shadow-2xl pointer-events-none">
+    <div class="flex justify-between items-center text-xs font-black text-red-400 mb-1 px-1">
+      <span id="bossNameText">👹 BOSS</span>
+      <span id="bossHpText">1000 / 1000</span>
+    </div>
+    <div class="w-full bg-slate-950/90 rounded-full h-3 overflow-hidden border border-red-500/30 p-0.5">
+      <div id="bossHpFill" class="bg-gradient-to-r from-red-600 via-rose-500 to-amber-400 h-full rounded-full transition-all duration-150"></div>
+    </div>
+  </div>
+
+  <!-- Invasion Warning Overlay -->
+  <div id="invasionAlert" class="hidden absolute inset-0 z-25 pointer-events-none animate-alert flex flex-col items-center justify-center">
+    <div class="bg-red-950/90 border-y-4 border-red-500 text-red-100 py-6 w-full text-center shadow-2xl backdrop-blur-md">
+      <div class="text-3xl sm:text-5xl font-black tracking-widest text-red-400 drop-shadow-[0_0_15px_rgba(239,68,68,0.9)] animate-bounce">
+        🚨 乱入モンスター出現 🚨
+      </div>
+      <p class="text-sm sm:text-base font-bold text-amber-300 mt-2">激レア強敵が乱入！弱点（🎯）を狙って撃破せよ！</p>
+    </div>
+  </div>
+
+  <!-- Map Screen -->
+  <div id="mapScreen" class="absolute inset-0 z-10 bg-slate-950/92 backdrop-blur-md flex flex-col items-center justify-center p-4 overflow-y-auto">
+    <div class="max-w-4xl w-full text-center space-y-4 my-auto py-6">
+      <div>
+        <h1 class="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-pink-400 to-purple-400 tracking-wider mb-2">
+          PRINCESS KICK KNIGHTS
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400 font-semibold">【完全スタンドアロン版】全12ステージ搭載！クリック / タッチで引っ張って爽快アクション！</p>
+      </div>
+
+      <!-- Stage Grid -->
+      <div id="stageGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4 p-2 max-h-[60vh] overflow-y-auto pr-1"></div>
+    </div>
+  </div>
+
+  <!-- Shop Modal -->
+  <div id="storeModal" class="hidden absolute inset-0 z-30 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl max-w-lg w-full shadow-2xl border border-white/20 relative">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-2xl font-black text-amber-400 flex items-center gap-2">
+            <span>🛒</span> ショップ
+          </h2>
+          <p class="text-xs text-slate-400">新キャラの解放やスキルの強化を行えます</p>
+        </div>
+        <button id="closeStoreBtn" class="text-slate-400 hover:text-white font-black text-xl px-3 py-1 rounded-xl glass-panel">✕</button>
+      </div>
+
+      <div class="flex gap-2 mb-4 border-b border-white/10 pb-2">
+        <button id="tabSkillBtn" class="flex-1 py-2 rounded-xl font-extrabold text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40">⚡ スキル強化</button>
+        <button id="tabHeroBtn" class="flex-1 py-2 rounded-xl font-extrabold text-xs bg-slate-800 text-slate-400 border border-slate-700">👤 新キャラ購入</button>
+      </div>
+
+      <div id="storeSkillList" class="space-y-3.5 max-h-[55vh] overflow-y-auto pr-1"></div>
+      <div id="storeHeroList" class="hidden space-y-3.5 max-h-[55vh] overflow-y-auto pr-1"></div>
+    </div>
+  </div>
+
+  <!-- Party Setup Modal -->
+  <div id="partyModal" class="hidden absolute inset-0 z-30 bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl max-w-lg w-full shadow-2xl border border-white/20 relative">
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <h2 class="text-2xl font-black text-cyan-400 flex items-center gap-2">
+            <span>🛡️</span> パーティー編成
+          </h2>
+          <p class="text-xs text-slate-400">出撃させる順番にクリック / タップでセット（最大8人）</p>
+        </div>
+        <button id="closePartyBtn" class="text-slate-400 hover:text-white font-black text-xl px-3 py-1 rounded-xl glass-panel">✕</button>
+      </div>
+
+      <div class="bg-slate-900/80 p-3 rounded-2xl border border-cyan-500/30 mb-4">
+        <div class="text-xs font-extrabold text-cyan-300 mb-2 flex justify-between">
+          <span>出撃デッキ (<span id="partyCountText">0/8</span>)</span>
+          <span class="text-[10px] text-slate-400">クリック / タップで外す</span>
+        </div>
+        <div id="selectedPartyList" class="flex items-center gap-2 overflow-x-auto py-1 min-h-[56px]"></div>
+      </div>
+
+      <div class="text-xs font-extrabold text-slate-300 mb-2">所持キャラクター (クリック / タップで追加)</div>
+      <div id="unlockedHeroInventory" class="grid grid-cols-2 gap-2 max-h-[35vh] overflow-y-auto pr-1"></div>
+    </div>
+  </div>
+
+  <!-- Party Queue UI -->
+  <div id="partyQueueBar" class="hidden absolute bottom-5 left-4 z-20 flex flex-col gap-1.5 glass-panel p-2.5 rounded-2xl shadow-2xl border border-white/10 pointer-events-none">
+    <div class="flex justify-between items-center text-[10px] font-black text-amber-300 tracking-wider">
+      <span>NEXT KNIGHTS (残機)</span>
+      <span id="remainingKicksText" class="text-cyan-300 font-extrabold text-xs">残 8人</span>
+    </div>
+    <div id="queueList" class="flex items-center gap-2 max-w-[85vw] overflow-x-auto py-1"></div>
+  </div>
+
+  <!-- Air Skill Prompt -->
+  <div id="skillPrompt" class="hidden absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center pointer-events-none animate-pulse-ring">
+    <div class="bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-black text-xs sm:text-base px-6 py-2 rounded-full shadow-2xl border-2 border-white/90 tracking-widest uppercase neon-glow-amber">
+      ✨ クリック / タップで空中必殺スキル発動！ ✨
+    </div>
+  </div>
+
+  <!-- Phase Banner -->
+  <div id="phaseBanner" class="hidden absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center pointer-events-none">
+    <div id="phaseBannerText" class="bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 text-white font-black text-sm sm:text-xl px-8 py-3 rounded-2xl shadow-2xl border-2 border-cyan-300 tracking-widest uppercase neon-glow-cyan">
+      ⚔️ 味方全員の追撃ターン！
+    </div>
+  </div>
+
+  <!-- Battle Clear March Banner -->
+  <div id="battleClearBanner" class="hidden absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-center pointer-events-none animate-bounce">
+    <div class="bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-slate-950 font-black text-2xl sm:text-4xl px-10 py-4 rounded-3xl shadow-2xl border-4 border-amber-200 tracking-widest uppercase neon-glow-amber">
+      🎉 BATTLE CLEAR! 進軍中... 🏃‍♀️💨
+    </div>
+  </div>
+
+  <!-- Result Modal -->
+  <div id="resultModal" class="hidden absolute inset-0 z-30 bg-slate-950/85 backdrop-blur-xl flex flex-col items-center justify-center p-4">
+    <div class="glass-panel p-6 sm:p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl border border-white/20 relative">
+      <h2 id="resultTitle" class="text-3xl font-black mb-1 text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-orange-400 to-red-500">
+        STAGE CLEAR!
+      </h2>
+      <p id="resultSubtitle" class="text-slate-300 text-xs sm:text-sm mb-4 font-semibold">モンスター軍団を全滅させました！</p>
+
+      <div id="starContainer" class="flex justify-center items-center gap-2 mb-5 text-4xl">
+        <span class="star1 text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]">★</span>
+        <span class="star2 text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]">★</span>
+        <span class="star3 text-slate-700">★</span>
+      </div>
+
+      <div class="bg-slate-900/90 rounded-2xl p-4 mb-4 border border-amber-500/30 text-xs sm:text-sm space-y-2">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400 font-bold">最高Hitダメージ</span>
+          <span id="modalMaxDmg" class="font-extrabold text-purple-300 text-base">0</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400 font-bold">獲得王冠</span>
+          <span id="modalCrownsEarned" class="font-extrabold text-amber-300">👑 0 / 0</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400 font-bold">温存残機ボーナス</span>
+          <span id="modalKickBonusText" class="font-extrabold text-cyan-300">+0 🪙</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-400 font-bold">獲得コイン</span>
+          <span id="modalCoinsEarned" class="font-extrabold text-amber-300 text-base">+0 🪙</span>
+        </div>
+      </div>
+
+      <button id="modalActionBtn" class="w-full py-3.5 px-6 rounded-2xl font-black bg-gradient-to-r from-amber-400 via-orange-500 to-red-500 text-slate-950 shadow-xl neon-glow-amber transition-all hover:scale-102 active:scale-98">
+        マップに戻る
+      </button>
+    </div>
+  </div>
+
+  <canvas id="gameCanvas" class="w-full h-full border-none shadow-inner"></canvas>
+
+  <script>
+    const BALANCE_CONFIG = {
+      WEAK_POINT_MULTIPLIER: 3.5,
+      CRITICAL_MULTIPLIER: 1.8,
+      BASE_COIN_REWARD: 50,
+      UPGRADE_BASE_COST: 120,
+      BIG_SIZE_MULTIPLIER: 1.8
+    };
+
+    class SoundEngine {
+      constructor() { this.ctx = null; }
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      playTone(freq, type = 'sine', duration = 0.1, gainVal = 0.1, freqEnd = null) {
+        if (!this.ctx) return;
+        try {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          if (freqEnd !== null) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), this.ctx.currentTime + duration);
+          }
+          gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch (e) {}
+      }
+      playKick() { this.playTone(160, 'triangle', 0.2, 0.35, 40); }
+      playHit() { this.playTone(120, 'square', 0.12, 0.25, 30); }
+      playCritical() {
+        this.playTone(450, 'sawtooth', 0.25, 0.35, 150);
+        setTimeout(() => this.playTone(900, 'square', 0.2, 0.3), 50);
+      }
+      playCrown() {
+        this.playTone(987.77, 'sine', 0.08, 0.2);
+        setTimeout(() => this.playTone(1318.51, 'sine', 0.15, 0.25), 60);
+      }
+      playDonut() {
+        this.playTone(523.25, 'sine', 0.1, 0.3);
+        setTimeout(() => this.playTone(659.25, 'sine', 0.1, 0.3), 60);
+        setTimeout(() => this.playTone(783.99, 'sine', 0.2, 0.35), 120);
+      }
+      playCoin() {
+        this.playTone(880, 'sine', 0.08, 0.15);
+        setTimeout(() => this.playTone(1320, 'sine', 0.12, 0.18), 50);
+      }
+      playSkill(type) {
+        if (type === 'CELESTIAL') {
+          this.playTone(350, 'sawtooth', 0.5, 0.4, 1200);
+        } else if (type === 'SWORDSMAN') {
+          this.playTone(550, 'sawtooth', 0.25, 0.3, 1000);
+        } else if (type === 'ARCHER') {
+          for (let i = 0; i < 4; i++) setTimeout(() => this.playTone(700 + i * 120, 'triangle', 0.08, 0.15), i * 35);
+        } else if (type === 'MAGE') {
+          this.playTone(220, 'sawtooth', 0.4, 0.3, 600);
+        } else if (type === 'LANCER') {
+          this.playTone(480, 'sawtooth', 0.3, 0.35, 120);
+        }
+      }
+      playAutoAttack() { this.playTone(320, 'square', 0.1, 0.15); }
+      playVictory() {
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((n, idx) => setTimeout(() => this.playTone(n, 'triangle', 0.25, 0.25), idx * 100));
+      }
+    }
+
+    const HERO_CLASSES = {
+      SWORDSMAN: {
+        id: 'SWORDSMAN', name: '剣士', icon: '⚔️', color: '#f43f5e', price: 0,
+        glowColor: 'rgba(244, 63, 94, 0.6)', skillName: '閃光一閃',
+        desc: '水平方向に疾走し、直線上の敵をまとめて斬り払う！'
+      },
+      ARCHER: {
+        id: 'ARCHER', name: '弓兵', icon: '🏹', color: '#10b981', price: 0,
+        glowColor: 'rgba(16, 185, 129, 0.6)', skillName: '精密射撃',
+        desc: '敵の弱点（🎯）に向かって誘導矢を放つ！'
+      },
+      MAGE: {
+        id: 'MAGE', name: '魔法使い', icon: '🪄', color: '#8b5cf6', price: 0,
+        glowColor: 'rgba(139, 92, 246, 0.6)', skillName: 'メテオストライク',
+        desc: '敵グループの頭上に隕石を落とし広範囲を巻き込む。'
+      },
+      LANCER: {
+        id: 'LANCER', name: '槍使い', icon: '🔱', color: '#06b6d4', price: 0,
+        glowColor: 'rgba(6, 182, 212, 0.6)', skillName: 'スパイラルドリル',
+        desc: '急降下ドリルで着地時に強力な衝撃波を放つ。'
+      },
+      NINJA: {
+        id: 'NINJA', name: '忍者', icon: '🥷', color: '#eab308', price: 1200,
+        glowColor: 'rgba(234, 179, 8, 0.6)', skillName: '影分身斬り',
+        desc: '複数の分身を生み出し、空中から多角連続攻撃！'
+      },
+      GUNMAN: {
+        id: 'GUNMAN', name: 'ガンマン', icon: '🔫', color: '#f97316', price: 2000,
+        glowColor: 'rgba(249, 115, 22, 0.6)', skillName: '跳弾貫通弾',
+        desc: '画面内を激しくバウンドする強力な弾丸を連射。'
+      },
+      SAMURAI: {
+        id: 'SAMURAI', name: '侍', icon: '🗡️', color: '#ec4899', price: 3500,
+        glowColor: 'rgba(236, 72, 153, 0.6)', skillName: '居合い一閃',
+        desc: '最も近いボス敵の背後へ一瞬で瞬身して一刀両断！'
+      },
+      CELESTIAL: {
+        id: 'CELESTIAL', name: '天空人', icon: '🌌', color: '#c084fc', price: 5000,
+        glowColor: 'rgba(192, 132, 252, 0.8)', skillName: '聖なる光柱',
+        desc: '神聖な光柱を召喚し全画面の敵にダメージを与える切り札！'
+      }
+    };
+
+    const STAGE_DEFINITIONS = [
+      // WORLD 1
+      {
+        id: '1-1', world: 1, name: '1-1 平原の出会い',
+        party: ['SWORDSMAN', 'ARCHER', 'LANCER', 'SWORDSMAN', 'MAGE', 'ARCHER', 'LANCER', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1200,
+            crowns: [{ x: 450, yOffset: -160 }, { x: 800, yOffset: -220 }],
+            donuts: [{ x: 600, yOffset: -180 }],
+            enemies: [
+              { x: 650, yOffset: 0, radius: 24, hp: 400, color: '#10b981', name: 'スライム', weakY: -12 },
+              { x: 950, yOffset: -60, radius: 22, hp: 500, color: '#3b82f6', name: 'コウモリ', weakY: -10 }
+            ]
+          },
+          {
+            battleX: 1200, battleWidth: 1200,
+            crowns: [{ x: 1600, yOffset: -180 }, { x: 2000, yOffset: -240 }],
+            donuts: [{ x: 1800, yOffset: -200 }],
+            enemies: [
+              { x: 1550, yOffset: 0, radius: 28, hp: 1000, color: '#10b981', name: 'ゴブリン兵', weakY: -15 },
+              { x: 2150, yOffset: 0, radius: 46, hp: 3500, color: '#f59e0b', name: 'オーク長官', isBoss: true, weakY: -25 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '1-2', world: 1, name: '1-2 峡谷の陣地',
+        party: ['ARCHER', 'SWORDSMAN', 'MAGE', 'LANCER', 'SWORDSMAN', 'ARCHER', 'CELESTIAL', 'MAGE'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1200,
+            crowns: [{ x: 500, yOffset: -200 }, { x: 900, yOffset: -260 }],
+            donuts: [{ x: 700, yOffset: -210 }],
+            enemies: [
+              { x: 650, yOffset: -100, radius: 22, hp: 700, color: '#8b5cf6', name: 'ナイトバット', weakY: -10 },
+              { x: 1000, yOffset: 0, radius: 28, hp: 1200, color: '#10b981', name: '盾ゴブリン', weakY: -14 }
+            ]
+          },
+          {
+            battleX: 1200, battleWidth: 1400,
+            crowns: [{ x: 1600, yOffset: -200 }, { x: 2200, yOffset: -240 }],
+            donuts: [{ x: 1900, yOffset: -220 }],
+            enemies: [
+              { x: 1650, yOffset: -120, radius: 24, hp: 1100, color: '#3b82f6', name: '飛行魔物', weakY: -12 },
+              { x: 2350, yOffset: 0, radius: 52, hp: 7500, color: '#ec4899', name: '渓谷の主', isBoss: true, weakY: -28 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '1-3', world: 1, name: '1-3 オーク要塞',
+        party: ['SWORDSMAN', 'LANCER', 'MAGE', 'ARCHER', 'CELESTIAL', 'SWORDSMAN', 'LANCER', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1000,
+            crowns: [{ x: 500, yOffset: -180 }],
+            donuts: [{ x: 650, yOffset: -200 }],
+            enemies: [
+              { x: 700, yOffset: 0, radius: 26, hp: 1200, color: '#10b981', name: '要塞前衛', weakY: -12 }
+            ]
+          },
+          {
+            battleX: 1000, battleWidth: 1100,
+            crowns: [{ x: 1400, yOffset: -220 }],
+            donuts: [{ x: 1550, yOffset: -220 }],
+            enemies: [
+              { x: 1300, yOffset: -110, radius: 24, hp: 1600, color: '#3b82f6', name: '偵察兵', weakY: -12 },
+              { x: 1800, yOffset: 0, radius: 32, hp: 2800, color: '#f59e0b', name: 'オーク精鋭', weakY: -16 }
+            ]
+          },
+          {
+            battleX: 2100, battleWidth: 1300,
+            crowns: [{ x: 2600, yOffset: -280 }, { x: 3000, yOffset: -220 }],
+            donuts: [{ x: 2800, yOffset: -250 }],
+            enemies: [
+              { x: 3050, yOffset: 0, radius: 60, hp: 16000, color: '#dc2626', name: 'オークキング', isBoss: true, weakY: -35 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '1-4', world: 1, name: '1-4 丘陵の決戦',
+        party: ['SWORDSMAN', 'ARCHER', 'LANCER', 'MAGE', 'SWORDSMAN', 'NINJA', 'GUNMAN', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1100,
+            crowns: [{ x: 550, yOffset: -210 }],
+            donuts: [{ x: 700, yOffset: -220 }],
+            enemies: [
+              { x: 750, yOffset: 0, radius: 30, hp: 2200, color: '#10b981', name: '丘陵守備隊', weakY: -15 }
+            ]
+          },
+          {
+            battleX: 1100, battleWidth: 1200,
+            crowns: [{ x: 1500, yOffset: -230 }],
+            donuts: [{ x: 1700, yOffset: -230 }],
+            enemies: [
+              { x: 1600, yOffset: -120, radius: 28, hp: 2500, color: '#8b5cf6', name: 'ワイバーン小隊', weakY: -14 },
+              { x: 2000, yOffset: 0, radius: 36, hp: 4500, color: '#f59e0b', name: '重装騎士', weakY: -18 }
+            ]
+          },
+          {
+            battleX: 2300, battleWidth: 1400,
+            crowns: [{ x: 2800, yOffset: -280 }, { x: 3300, yOffset: -250 }],
+            donuts: [{ x: 3000, yOffset: -260 }],
+            enemies: [
+              { x: 3350, yOffset: 0, radius: 68, hp: 28000, color: '#b91c1c', name: '丘陵の大将軍', isBoss: true, weakY: -38 }
+            ]
+          }
+        ]
+      },
+      // WORLD 2
+      {
+        id: '2-1', world: 2, name: '2-1 溶岩地帯の侵入',
+        party: ['LANCER', 'SWORDSMAN', 'MAGE', 'GUNMAN', 'NINJA', 'ARCHER', 'SAMURAI', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1200,
+            crowns: [{ x: 500, yOffset: -220 }],
+            donuts: [{ x: 750, yOffset: -210 }],
+            enemies: [
+              { x: 800, yOffset: 0, radius: 30, hp: 3500, color: '#f97316', name: 'マグマバット', weakY: -15 },
+              { x: 1050, yOffset: -80, radius: 26, hp: 4000, color: '#ef4444', name: 'サラマンダー', weakY: -13 }
+            ]
+          },
+          {
+            battleX: 1200, battleWidth: 1300,
+            crowns: [{ x: 1700, yOffset: -250 }],
+            donuts: [{ x: 1900, yOffset: -230 }],
+            enemies: [
+              { x: 1850, yOffset: 0, radius: 40, hp: 8000, color: '#dc2626', name: '溶岩の歩兵', weakY: -20 },
+              { x: 2250, yOffset: 0, radius: 55, hp: 22000, color: '#b91c1c', name: '火炎巨人', isBoss: true, weakY: -30 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '2-2', world: 2, name: '2-2 灼熱の洞窟',
+        party: ['SWORDSMAN', 'MAGE', 'ARCHER', 'NINJA', 'LANCER', 'GUNMAN', 'SAMURAI', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1200,
+            crowns: [{ x: 600, yOffset: -230 }],
+            donuts: [{ x: 800, yOffset: -220 }],
+            enemies: [
+              { x: 850, yOffset: -120, radius: 28, hp: 5000, color: '#ea580c', name: '洞窟の怪鳥', weakY: -14 },
+              { x: 1050, yOffset: 0, radius: 34, hp: 6500, color: '#b91c1c', name: '火炎スライム', weakY: -17 }
+            ]
+          },
+          {
+            battleX: 1200, battleWidth: 1400,
+            crowns: [{ x: 1800, yOffset: -260 }],
+            donuts: [{ x: 2000, yOffset: -240 }],
+            enemies: [
+              { x: 1900, yOffset: 0, radius: 38, hp: 10000, color: '#c2410c', name: 'マグマゴーレム', weakY: -19 },
+              { x: 2380, yOffset: 0, radius: 62, hp: 35000, color: '#991b1b', name: '灼熱の魔獣', isBoss: true, weakY: -32 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '2-3', world: 2, name: '2-3 炎竜の回廊',
+        party: ['ARCHER', 'LANCER', 'MAGE', 'GUNMAN', 'SWORDSMAN', 'SAMURAI', 'NINJA', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1000,
+            crowns: [{ x: 500, yOffset: -200 }],
+            donuts: [{ x: 650, yOffset: -210 }],
+            enemies: [
+              { x: 750, yOffset: 0, radius: 32, hp: 7000, color: '#f97316', name: '回廊の番兵', weakY: -16 }
+            ]
+          },
+          {
+            battleX: 1000, battleWidth: 1100,
+            crowns: [{ x: 1400, yOffset: -220 }],
+            donuts: [{ x: 1600, yOffset: -230 }],
+            enemies: [
+              { x: 1500, yOffset: -100, radius: 30, hp: 9000, color: '#ef4444', name: 'ファイアドラゴン', weakY: -15 },
+              { x: 1800, yOffset: 0, radius: 36, hp: 14000, color: '#c2410c', name: '重装溶岩兵', weakY: -18 }
+            ]
+          },
+          {
+            battleX: 2100, battleWidth: 1400,
+            crowns: [{ x: 2600, yOffset: -290 }, { x: 3100, yOffset: -260 }],
+            donuts: [{ x: 2850, yOffset: -270 }],
+            enemies: [
+              { x: 3150, yOffset: 0, radius: 72, hp: 55000, color: '#7f1d1d', name: '古代炎竜ワイバーン', isBoss: true, weakY: -40 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '2-4', world: 2, name: '2-4 ヴォルケーノキング',
+        party: ['SWORDSMAN', 'GUNMAN', 'SAMURAI', 'NINJA', 'LANCER', 'MAGE', 'CELESTIAL', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1100,
+            crowns: [{ x: 550, yOffset: -220 }],
+            donuts: [{ x: 750, yOffset: -230 }],
+            enemies: [
+              { x: 800, yOffset: 0, radius: 36, hp: 12000, color: '#ea580c', name: '噴火歩兵', weakY: -18 }
+            ]
+          },
+          {
+            battleX: 1100, battleWidth: 1200,
+            crowns: [{ x: 1550, yOffset: -240 }],
+            donuts: [{ x: 1750, yOffset: -240 }],
+            enemies: [
+              { x: 1650, yOffset: -120, radius: 32, hp: 16000, color: '#dc2626', name: 'ヴォルケーノバット', weakY: -16 },
+              { x: 2000, yOffset: 0, radius: 42, hp: 24000, color: '#991b1b', name: '溶岩精鋭', weakY: -21 }
+            ]
+          },
+          {
+            battleX: 2300, battleWidth: 1500,
+            crowns: [{ x: 2850, yOffset: -300 }, { x: 3400, yOffset: -270 }],
+            donuts: [{ x: 3100, yOffset: -280 }],
+            enemies: [
+              { x: 3450, yOffset: 0, radius: 80, hp: 90000, color: '#450a0a', name: '火山王ヴォルケーノ', isBoss: true, weakY: -45 }
+            ]
+          }
+        ]
+      },
+      // WORLD 3
+      {
+        id: '3-1', world: 3, name: '3-1 天空の架け橋',
+        party: ['NINJA', 'GUNMAN', 'SAMURAI', 'MAGE', 'LANCER', 'SWORDSMAN', 'ARCHER', 'CELESTIAL'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1200,
+            crowns: [{ x: 550, yOffset: -240 }],
+            donuts: [{ x: 800, yOffset: -230 }],
+            enemies: [
+              { x: 850, yOffset: -120, radius: 30, hp: 15000, color: '#a855f7', name: 'スカイバット', weakY: -15 },
+              { x: 1100, yOffset: 0, radius: 36, hp: 20000, color: '#6366f1', name: '天空の騎士', weakY: -18 }
+            ]
+          },
+          {
+            battleX: 1200, battleWidth: 1400,
+            crowns: [{ x: 1800, yOffset: -270 }],
+            donuts: [{ x: 2050, yOffset: -250 }],
+            enemies: [
+              { x: 1950, yOffset: 0, radius: 45, hp: 35000, color: '#4f46e5', name: '天空のガーディアン', weakY: -22 },
+              { x: 2400, yOffset: 0, radius: 65, hp: 95000, color: '#312e81', name: '架け橋の守護神', isBoss: true, weakY: -33 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '3-2', world: 3, name: '3-2 浮遊島の門番',
+        party: ['SAMURAI', 'GUNMAN', 'NINJA', 'CELESTIAL', 'SWORDSMAN', 'MAGE', 'LANCER', 'ARCHER'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1200,
+            crowns: [{ x: 600, yOffset: -250 }],
+            donuts: [{ x: 850, yOffset: -240 }],
+            enemies: [
+              { x: 900, yOffset: -140, radius: 32, hp: 22000, color: '#c084fc', name: '浮遊魔物', weakY: -16 },
+              { x: 1150, yOffset: 0, radius: 40, hp: 30000, color: '#818cf8', name: '浮遊石兵', weakY: -20 }
+            ]
+          },
+          {
+            battleX: 1200, battleWidth: 1400,
+            crowns: [{ x: 1850, yOffset: -280 }],
+            donuts: [{ x: 2100, yOffset: -260 }],
+            enemies: [
+              { x: 2000, yOffset: 0, radius: 50, hp: 50000, color: '#4338ca', name: '島主の親衛隊', weakY: -25 },
+              { x: 2450, yOffset: 0, radius: 70, hp: 130000, color: '#312e81', name: '浮遊島の大門番', isBoss: true, weakY: -35 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '3-3', world: 3, name: '3-3 星屑の神殿',
+        party: ['CELESTIAL', 'SAMURAI', 'GUNMAN', 'NINJA', 'MAGE', 'LANCER', 'ARCHER', 'SWORDSMAN'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1100,
+            crowns: [{ x: 550, yOffset: -230 }],
+            donuts: [{ x: 750, yOffset: -240 }],
+            enemies: [
+              { x: 800, yOffset: 0, radius: 35, hp: 30000, color: '#a855f7', name: '神殿前衛', weakY: -17 }
+            ]
+          },
+          {
+            battleX: 1100, battleWidth: 1200,
+            crowns: [{ x: 1550, yOffset: -260 }],
+            donuts: [{ x: 1750, yOffset: -250 }],
+            enemies: [
+              { x: 1650, yOffset: -130, radius: 34, hp: 42000, color: '#818cf8', name: 'スターウィスプ', weakY: -17 },
+              { x: 2000, yOffset: 0, radius: 48, hp: 65000, color: '#4f46e5', name: '神殿精鋭', weakY: -24 }
+            ]
+          },
+          {
+            battleX: 2300, battleWidth: 1500,
+            crowns: [{ x: 2850, yOffset: -310 }, { x: 3400, yOffset: -280 }],
+            donuts: [{ x: 3100, yOffset: -290 }],
+            enemies: [
+              { x: 3450, yOffset: 0, radius: 76, hp: 180000, color: '#1e1b4b', name: '星屑の司祭', isBoss: true, weakY: -42 }
+            ]
+          }
+        ]
+      },
+      {
+        id: '3-4', world: 3, name: '3-4 魔王城の大決戦',
+        party: ['CELESTIAL', 'SAMURAI', 'GUNMAN', 'NINJA', 'CELESTIAL', 'SAMURAI', 'GUNMAN', 'NINJA'],
+        battles: [
+          {
+            battleX: 0, battleWidth: 1100,
+            crowns: [{ x: 550, yOffset: -240 }],
+            donuts: [{ x: 750, yOffset: -250 }],
+            enemies: [
+              { x: 800, yOffset: 0, radius: 40, hp: 45000, color: '#6b21a8', name: '魔城親衛兵', weakY: -20 }
+            ]
+          },
+          {
+            battleX: 1100, battleWidth: 1300,
+            crowns: [{ x: 1600, yOffset: -270 }],
+            donuts: [{ x: 1850, yOffset: -260 }],
+            enemies: [
+              { x: 1700, yOffset: -140, radius: 38, hp: 60000, color: '#581c87', name: '魔界ドラゴン', weakY: -19 },
+              { x: 2100, yOffset: 0, radius: 52, hp: 95000, color: '#3b0764', name: '魔導師長', weakY: -26 }
+            ]
+          },
+          {
+            battleX: 2400, battleWidth: 1600,
+            crowns: [{ x: 3000, yOffset: -320 }, { x: 3600, yOffset: -290 }],
+            donuts: [{ x: 3300, yOffset: -300 }],
+            enemies: [
+              { x: 3650, yOffset: 0, radius: 85, hp: 300000, color: '#020617', name: '暗黒魔王ダークロード', isBoss: true, weakY: -50 }
+            ]
+          }
+        ]
+      }
+    ];
+
+    function formatNumber(num) {
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+      return Math.floor(num).toLocaleString();
+    }
+
+    class Particle {
+      constructor(x, y, color, vx, vy, size = 4, life = 1.0, isBloom = false) {
+        this.x = x; this.y = y; this.color = color;
+        this.vx = vx; this.vy = vy; this.size = size;
+        this.life = life; this.maxLife = life; this.isBloom = isBloom;
+      }
+      update(dt) { this.x += this.vx; this.y += this.vy; this.life -= dt; }
+      draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+        if (this.isBloom) ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = this.color;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    class FloatingText {
+      constructor(x, y, text, color = '#ffffff', fontSize = 20, isCritical = false) {
+        this.x = x; this.y = y; this.text = text;
+        this.color = color; this.fontSize = fontSize;
+        this.life = 1.2; this.maxLife = 1.2; this.vy = -2.2;
+        this.isCritical = isCritical;
+      }
+      update(dt) { this.y += this.vy; this.life -= dt; }
+      draw(ctx) {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life / this.maxLife);
+        const sz = this.isCritical ? this.fontSize * 1.3 : this.fontSize;
+        ctx.font = `900 ${sz}px 'Plus Jakarta Sans', sans-serif`;
+        ctx.fillStyle = this.color; ctx.strokeStyle = '#000000'; ctx.lineWidth = 4;
+        ctx.strokeText(this.text, this.x, this.y);
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.restore();
+      }
+    }
+
+    class CoinParticle {
+      constructor(x, y, targetX, targetY) {
+        this.x = x; this.y = y; this.targetX = targetX; this.targetY = targetY;
+        this.vx = (Math.random() - 0.5) * 8; this.vy = -Math.random() * 6 - 3;
+        this.life = 1.0; this.arrived = false;
+      }
+      update(dt) {
+        if (this.life > 0.6) {
+          this.x += this.vx; this.y += this.vy; this.vy += 0.4;
+        } else {
+          const dx = this.targetX - this.x, dy = this.targetY - this.y;
+          this.x += dx * 0.2; this.y += dy * 0.2;
+          if (Math.hypot(dx, dy) < 18) this.arrived = true;
+        }
+        this.life -= dt;
+      }
+      draw(ctx) {
+        if (this.arrived) return;
+        ctx.save(); ctx.font = '16px sans-serif'; ctx.fillText('🪙', this.x, this.y); ctx.restore();
+      }
+    }
+
+    class KeriHimeGame {
+      constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.sound = new SoundEngine();
+
+        this.width = window.innerWidth;
+        this.height = window.innerHeight;
+        this.gravity = 0.36;
+        this.groundY = this.height - 100;
+
+        this.cameraX = 0;
+        this.targetCameraX = 0;
+        this.stageWidth = 2800;
+
+        this.coins = parseInt(localStorage.getItem('pkk_coins') || '300');
+        this.unlockedStageIndex = parseInt(localStorage.getItem('pkk_unlocked') || '0');
+        this.skillLevels = JSON.parse(localStorage.getItem('pkk_skills') || '{"SWORDSMAN":1,"ARCHER":1,"MAGE":1,"LANCER":1}');
+        this.unlockedHeroes = JSON.parse(localStorage.getItem('pkk_unlocked_heroes') || '["SWORDSMAN","ARCHER","MAGE","LANCER"]');
+        this.customParty = JSON.parse(localStorage.getItem('pkk_custom_party') || '["SWORDSMAN","ARCHER","MAGE","LANCER","SWORDSMAN","ARCHER","MAGE","LANCER"]');
+        this.stageStars = JSON.parse(localStorage.getItem('pkk_stars') || '{}');
+
+        this.currentStageIndex = 0;
+        this.currentBattleIndex = 0;
+        this.stageCoinsEarned = 0;
+        this.stageCrownsEarned = 0;
+        this.totalCrownsInStage = 0;
+        this.maxDamageInStage = 0;
+
+        this.partyQueue = [];
+        this.landedKnights = [];
+        this.activeHero = null;
+
+        this.isPlaying = false;
+        this.gameState = 'MAP';
+
+        this.princessPos = { x: 130, y: this.groundY - 35 };
+        this.isDragging = false;
+        this.kickAnimTimer = 0;
+        this.dragStart = { x: 0, y: 0 };
+        this.dragCurrent = { x: 0, y: 0 };
+        this.maxPullRadius = 140;
+
+        this.enemies = [];
+        this.crowns = [];
+        this.donuts = [];
+        this.projectiles = [];
+        this.particles = [];
+        this.coinParticles = [];
+        this.floatingTexts = [];
+        this.screenShake = 0;
+
+        this.initResize();
+        this.bindEvents();
+        this.renderMapScreen();
+        this.updateGlobalUI();
+
+        this.lastTime = performance.now();
+        requestAnimationFrame((t) => this.loop(t));
+      }
+
+      initResize() {
+        const resize = () => {
+          this.width = window.innerWidth;
+          this.height = window.innerHeight;
+          this.canvas.width = this.width;
+          this.canvas.height = this.height;
+          this.groundY = this.height - 100;
+          if (this.gameState === 'AIMING') this.princessPos.y = this.groundY - 35;
+        };
+        window.addEventListener('resize', resize);
+        resize();
+      }
+
+      saveData() {
+        localStorage.setItem('pkk_coins', this.coins.toString());
+        localStorage.setItem('pkk_unlocked', this.unlockedStageIndex.toString());
+        localStorage.setItem('pkk_skills', JSON.stringify(this.skillLevels));
+        localStorage.setItem('pkk_unlocked_heroes', JSON.stringify(this.unlockedHeroes));
+        localStorage.setItem('pkk_custom_party', JSON.stringify(this.customParty));
+        localStorage.setItem('pkk_stars', JSON.stringify(this.stageStars));
+      }
+
+      updateGlobalUI() {
+        document.getElementById('globalCoins').innerText = this.coins.toLocaleString();
+      }
+
+      renderMapScreen() {
+        const grid = document.getElementById('stageGrid');
+        grid.innerHTML = '';
+        STAGE_DEFINITIONS.forEach((stg, idx) => {
+          const isUnlocked = idx <= this.unlockedStageIndex;
+          const starsEarned = this.stageStars[stg.id] || 0;
+          const btn = document.createElement('button');
+          btn.className = `p-3.5 rounded-2xl border font-black flex flex-col items-center justify-center transition-all ${
+            isUnlocked
+              ? 'glass-panel border-amber-500/50 hover:bg-amber-500/20 text-amber-300 hover:scale-105 active:scale-95 shadow-lg cursor-pointer'
+              : 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed opacity-60'
+          }`;
+          let starStr = '☆☆☆';
+          if (starsEarned === 3) starStr = '★★★';
+          else if (starsEarned === 2) starStr = '★★☆';
+          else if (starsEarned === 1) starStr = '★☆☆';
+
+          btn.innerHTML = `
+            <span class="text-[9px] text-slate-400 mb-0.5">WORLD ${stg.world}</span>
+            <span class="text-lg font-black mb-0.5 text-white">${stg.id}</span>
+            <span class="text-[10px] ${isUnlocked ? 'text-amber-400' : 'text-slate-600'} font-semibold mb-1 truncate max-w-full">${stg.name.split(' ')[1]}</span>
+            <div class="text-xs text-amber-300 font-bold tracking-widest">${starStr}</div>
+          `;
+          if (isUnlocked) btn.onclick = () => this.startStage(idx);
+          grid.appendChild(btn);
+        });
+      }
+
+      startStage(index) {
+        this.currentStageIndex = index;
+        this.currentBattleIndex = 0;
+        const stg = STAGE_DEFINITIONS[index];
+
+        this.isPlaying = true;
+        this.gameState = 'AIMING';
+        this.stageCoinsEarned = 0;
+        this.stageCrownsEarned = 0;
+        this.maxDamageInStage = 0;
+
+        const lastBattle = stg.battles[stg.battles.length - 1];
+        this.stageWidth = lastBattle.battleX + lastBattle.battleWidth + 400;
+
+        this.cameraX = 0;
+        this.targetCameraX = 0;
+
+        this.princessPos = { x: 130, y: this.groundY - 35 };
+        this.partyQueue = this.customParty.length > 0 ? [...this.customParty] : [...stg.party];
+        this.landedKnights = [];
+        this.activeHero = null;
+
+        this.enemies = [];
+        this.crowns = [];
+        this.donuts = [];
+        this.projectiles = [];
+        this.particles = [];
+        this.coinParticles = [];
+        this.floatingTexts = [];
+
+        let crownTotal = 0;
+        stg.battles.forEach(b => {
+          b.crowns.forEach(c => {
+            this.crowns.push({ x: c.x, y: this.groundY + c.yOffset, radius: 16, collected: false });
+            crownTotal++;
+          });
+          if (b.donuts) {
+            b.donuts.forEach(d => {
+              this.donuts.push({ x: d.x, y: this.groundY + d.yOffset, radius: 22, collected: false });
+            });
+          }
+        });
+        this.totalCrownsInStage = crownTotal;
+
+        this.loadCurrentBattleEnemies();
+
+        document.getElementById('mapScreen').classList.add('hidden');
+        document.getElementById('gameStageBadge').classList.remove('hidden');
+        document.getElementById('crownCounter').classList.remove('hidden');
+        document.getElementById('progressBarContainer').classList.remove('hidden');
+        document.getElementById('partyQueueBar').classList.remove('hidden');
+        document.getElementById('homeBtn').classList.remove('hidden');
+        document.getElementById('currentStageText').innerText = stg.id;
+        document.getElementById('currentBattleText').innerText = `BATTLE 1/${stg.battles.length}`;
+        document.getElementById('stageCrownsText').innerText = `0 / ${this.totalCrownsInStage}`;
+
+        this.updateBossBarUI();
+        this.updatePartyQueueUI();
+      }
+
+      loadCurrentBattleEnemies() {
+        const stg = STAGE_DEFINITIONS[this.currentStageIndex];
+        const b = stg.battles[this.currentBattleIndex];
+        this.enemies = [];
+        b.enemies.forEach(eData => {
+          this.enemies.push({
+            x: eData.x, y: this.groundY - eData.radius + eData.yOffset,
+            radius: eData.radius, hp: eData.hp, maxHp: eData.hp,
+            name: eData.name, isBoss: !!eData.isBoss, color: eData.color, weakY: eData.weakY || -15
+          });
+        });
+        document.getElementById('currentBattleText').innerText = `BATTLE ${this.currentBattleIndex + 1}/${stg.battles.length}`;
+        this.updateBossBarUI();
+      }
+
+      updatePartyQueueUI() {
+        const queueContainer = document.getElementById('queueList');
+        const remText = document.getElementById('remainingKicksText');
+        queueContainer.innerHTML = '';
+        remText.innerText = `残 ${this.partyQueue.length}人`;
+
+        this.partyQueue.forEach((type, idx) => {
+          const hInfo = HERO_CLASSES[type];
+          if (!hInfo) return;
+          const div = document.createElement('div');
+          div.className = `px-2.5 py-1 rounded-xl text-xs font-black flex items-center gap-1 border shrink-0 ${
+            idx === 0 ? 'bg-amber-500/20 border-amber-400 text-amber-300 scale-105 shadow-md' : 'bg-slate-800/50 border-slate-700 text-slate-400'
+          }`;
+          div.innerHTML = `<span>${hInfo.icon}</span><span>${hInfo.name}</span>`;
+          queueContainer.appendChild(div);
+        });
+      }
+
+      updateBossBarUI() {
+        const boss = this.enemies.find(e => e.isBoss && e.hp > 0);
+        const barContainer = document.getElementById('bossBarContainer');
+        if (boss) {
+          barContainer.classList.remove('hidden');
+          document.getElementById('bossNameText').innerText = `👹 ${boss.name}`;
+          document.getElementById('bossHpText').innerText = `${formatNumber(boss.hp)} / ${formatNumber(boss.maxHp)}`;
+          const ratio = Math.max(0, boss.hp / boss.maxHp);
+          document.getElementById('bossHpFill').style.width = `${ratio * 100}%`;
+        } else {
+          barContainer.classList.add('hidden');
+        }
+      }
+
+      exitToMap() {
+        this.isPlaying = false;
+        this.gameState = 'MAP';
+        document.getElementById('mapScreen').classList.remove('hidden');
+        document.getElementById('gameStageBadge').classList.add('hidden');
+        document.getElementById('crownCounter').classList.add('hidden');
+        document.getElementById('bossBarContainer').classList.add('hidden');
+        document.getElementById('progressBarContainer').classList.add('hidden');
+        document.getElementById('partyQueueBar').classList.add('hidden');
+        document.getElementById('homeBtn').classList.add('hidden');
+        document.getElementById('resultModal').classList.add('hidden');
+        document.getElementById('invasionAlert').classList.add('hidden');
+        this.renderMapScreen();
+      }
+
+      bindEvents() {
+        document.getElementById('partyBtn').onclick = () => {
+          this.renderPartyModal();
+          document.getElementById('partyModal').classList.remove('hidden');
+        };
+        document.getElementById('closePartyBtn').onclick = () => document.getElementById('partyModal').classList.add('hidden');
+
+        document.getElementById('storeBtn').onclick = () => {
+          this.renderStoreModal();
+          document.getElementById('storeModal').classList.remove('hidden');
+        };
+        document.getElementById('closeStoreBtn').onclick = () => document.getElementById('storeModal').classList.add('hidden');
+
+        document.getElementById('homeBtn').onclick = () => this.exitToMap();
+
+        const handleStart = (x, y) => {
+          this.sound.init();
+          if (!this.isPlaying) return;
+          const worldX = x + this.cameraX;
+          const worldY = y;
+
+          if (this.gameState === 'AIMING' && this.partyQueue.length > 0) {
+            const dist = Math.hypot(worldX - this.princessPos.x, worldY - this.princessPos.y);
+            if (dist < 160) {
+              this.isDragging = true;
+              this.dragStart = { x: this.princessPos.x, y: this.princessPos.y };
+              this.dragCurrent = { x: worldX, y: worldY };
+            }
+          } else if (this.gameState === 'FLYING' && this.activeHero && !this.activeHero.hasUsedSkill) {
+            this.triggerAirSkill();
+          }
+        };
+
+        const handleMove = (x, y) => { if (this.isDragging) this.dragCurrent = { x: x + this.cameraX, y }; };
+        const handleEnd = () => {
+          if (this.isDragging) {
+            this.isDragging = false;
+            this.kickNextHero();
+          }
+        };
+
+        this.canvas.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
+        window.addEventListener('mouseup', handleEnd);
+
+        this.canvas.addEventListener('touchstart', (e) => {
+          if (e.cancelable) e.preventDefault();
+          if (e.touches.length > 0) handleStart(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+          if (e.target === this.canvas && e.cancelable) e.preventDefault();
+          if (e.touches.length > 0) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+
+        window.addEventListener('touchend', (e) => {
+          if (e.target === this.canvas && e.cancelable) e.preventDefault();
+          handleEnd();
+        }, { passive: false });
+
+        document.getElementById('modalActionBtn').onclick = () => {
+          document.getElementById('resultModal').classList.add('hidden');
+          this.exitToMap();
+        };
+      }
+
+      renderStoreModal() {
+        const skillContainer = document.getElementById('storeSkillList');
+        const heroContainer = document.getElementById('storeHeroList');
+        skillContainer.innerHTML = '';
+        heroContainer.innerHTML = '';
+
+        this.unlockedHeroes.forEach(heroId => {
+          const hero = HERO_CLASSES[heroId];
+          if (!hero) return;
+          const currentLvl = this.skillLevels[hero.id] || 1;
+          const isMax = currentLvl >= 5;
+          const cost = currentLvl * BALANCE_CONFIG.UPGRADE_BASE_COST;
+
+          const div = document.createElement('div');
+          div.className = 'glass-panel p-3.5 rounded-2xl flex items-center justify-between border border-white/10';
+          div.innerHTML = `
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">${hero.icon}</span>
+              <div>
+                <div class="font-extrabold text-sm text-amber-300">${hero.name}: ${hero.skillName}</div>
+                <div class="text-[11px] text-slate-400 leading-tight mt-0.5">${hero.desc}</div>
+                <div class="text-xs text-purple-300 font-bold mt-1">LV. ${currentLvl} ${isMax ? '(MAX)' : ''}</div>
+              </div>
+            </div>
+            <button ${isMax || this.coins < cost ? 'disabled' : ''} class="buy-skill-btn px-3.5 py-2 rounded-xl font-black text-xs min-w-[75px] ${
+              isMax ? 'bg-slate-800 text-slate-500' : this.coins >= cost ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 hover:scale-105 active:scale-95 cursor-pointer' : 'bg-slate-800 text-slate-500'
+            }">
+              ${isMax ? 'MAX' : `${cost} 🪙`}
+            </button>
+          `;
+          const buyBtn = div.querySelector('.buy-skill-btn');
+          if (buyBtn && !isMax) buyBtn.onclick = () => this.buySkillUpgrade(hero.id, cost);
+          skillContainer.appendChild(div);
+        });
+
+        Object.values(HERO_CLASSES).forEach(hero => {
+          const isOwned = this.unlockedHeroes.includes(hero.id);
+          const cost = hero.price;
+
+          const div = document.createElement('div');
+          div.className = 'glass-panel p-3.5 rounded-2xl flex items-center justify-between border border-white/10';
+          div.innerHTML = `
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">${hero.icon}</span>
+              <div>
+                <div class="font-extrabold text-sm text-cyan-300">${hero.name}</div>
+                <div class="text-[11px] text-slate-400 leading-tight mt-0.5">${hero.desc}</div>
+              </div>
+            </div>
+            <button ${isOwned || this.coins < cost ? 'disabled' : ''} class="buy-hero-btn px-3.5 py-2 rounded-xl font-black text-xs min-w-[85px] ${
+              isOwned ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : this.coins >= cost ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-950 hover:scale-105 active:scale-95 cursor-pointer' : 'bg-slate-800 text-slate-500'
+            }">
+              ${isOwned ? '所持済み' : `${cost} 🪙`}
+            </button>
+          `;
+          const buyBtn = div.querySelector('.buy-hero-btn');
+          if (buyBtn && !isOwned) buyBtn.onclick = () => this.buyHero(hero.id, cost);
+          heroContainer.appendChild(div);
+        });
+      }
+
+      buyHero(heroId, cost) {
+        if (this.coins >= cost && !this.unlockedHeroes.includes(heroId)) {
+          this.coins -= cost;
+          this.unlockedHeroes.push(heroId);
+          this.skillLevels[heroId] = 1;
+          this.sound.playCoin();
+          this.saveData();
+          this.updateGlobalUI();
+          this.renderStoreModal();
+          this.renderPartyModal();
+        }
+      }
+
+      buySkillUpgrade(heroId, cost) {
+        const currentLvl = this.skillLevels[heroId] || 1;
+        if (this.coins >= cost && currentLvl < 5) {
+          this.coins -= cost;
+          this.skillLevels[heroId] = currentLvl + 1;
+          this.sound.playCoin();
+          this.saveData();
+          this.updateGlobalUI();
+          this.renderStoreModal();
+        }
+      }
+
+      renderPartyModal() {
+        const partyList = document.getElementById('selectedPartyList');
+        const invList = document.getElementById('unlockedHeroInventory');
+        const countText = document.getElementById('partyCountText');
+
+        partyList.innerHTML = '';
+        invList.innerHTML = '';
+        countText.innerText = `${this.customParty.length}/8`;
+
+        this.customParty.forEach((heroId, idx) => {
+          const hero = HERO_CLASSES[heroId];
+          if (!hero) return;
+          const slot = document.createElement('button');
+          slot.className = 'glass-panel px-3 py-2 rounded-xl flex items-center gap-1.5 border border-cyan-400/50 hover:bg-rose-500/20 active:scale-95 transition-all shrink-0 text-xs font-black text-white cursor-pointer';
+          slot.innerHTML = `<span>${idx + 1}.</span> <span>${hero.icon}</span> <span>${hero.name}</span>`;
+          slot.onclick = () => {
+            if (this.customParty.length > 1) {
+              this.customParty.splice(idx, 1);
+              this.saveData();
+              this.renderPartyModal();
+            }
+          };
+          partyList.appendChild(slot);
+        });
+
+        this.unlockedHeroes.forEach(heroId => {
+          const hero = HERO_CLASSES[heroId];
+          if (!hero) return;
+          const isMaxParty = this.customParty.length >= 8;
+
+          const card = document.createElement('button');
+          card.className = `p-2.5 rounded-2xl flex items-center gap-2 border font-extrabold text-xs transition-all text-left ${
+            isMaxParty ? 'bg-slate-900/40 border-slate-800 text-slate-500 cursor-not-allowed' : 'glass-panel border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/20 hover:scale-102 active:scale-98 cursor-pointer'
+          }`;
+          card.innerHTML = `
+            <span class="text-xl">${hero.icon}</span>
+            <div>
+              <div class="text-white">${hero.name}</div>
+              <div class="text-[10px] text-slate-400">Lv.${this.skillLevels[hero.id] || 1}</div>
+            </div>
+          `;
+          if (!isMaxParty) {
+            card.onclick = () => {
+              this.customParty.push(heroId);
+              this.saveData();
+              this.renderPartyModal();
+            };
+          }
+          invList.appendChild(card);
+        });
+      }
+
+      kickNextHero() {
+        if (this.partyQueue.length === 0) return;
+        const dx = this.dragStart.x - this.dragCurrent.x;
+        const dy = this.dragStart.y - this.dragCurrent.y;
+        const dist = Math.min(Math.hypot(dx, dy), this.maxPullRadius);
+        if (dist < 15) return;
+
+        const angle = Math.atan2(dy, dx);
+        const launchSpeed = dist * 0.23;
+        const type = this.partyQueue.shift();
+        this.updatePartyQueueUI();
+
+        this.activeHero = {
+          x: this.princessPos.x, y: this.princessPos.y,
+          vx: Math.cos(angle) * launchSpeed, vy: Math.sin(angle) * launchSpeed,
+          radius: 20, type: type, rotation: 0, stopped: false, trail: [],
+          hasUsedSkill: false, lancerImpactPending: false, isBig: false,
+          flightTimer: 0, phaseTriggered: false,
+          hitCooldowns: new Map()
+        };
+
+        this.gameState = 'FLYING';
+        this.kickAnimTimer = 0.35;
+        this.sound.playKick();
+        document.getElementById('skillPrompt').classList.remove('hidden');
+      }
+
+      triggerAirSkill() {
+        if (!this.activeHero || this.activeHero.hasUsedSkill) return;
+        this.activeHero.hasUsedSkill = true;
+
+        const hero = this.activeHero;
+        const lvl = this.skillLevels[hero.type] || 1;
+        this.sound.playSkill(hero.type);
+        document.getElementById('skillPrompt').classList.add('hidden');
+
+        if (hero.type === 'CELESTIAL') {
+          this.screenShake = 22;
+          const damage = 1000 + lvl * 400;
+          this.enemies.forEach(e => {
+            if (e.hp <= 0) return;
+            this.damageEnemy(e, damage, e.x, e.y - 20, false);
+          });
+          for (let i = 0; i < 30; i++) {
+            this.particles.push(new Particle(
+              hero.x + (Math.random() - 0.5) * 300, hero.y + (Math.random() - 0.5) * 300,
+              '#c084fc', (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, Math.random() * 6 + 2, 0.8, true
+            ));
+          }
+        } else if (hero.type === 'NINJA') {
+          const count = 3 + Math.floor(lvl / 2);
+          for (let i = 0; i < count; i++) {
+            this.projectiles.push({
+              x: hero.x + (i - 1) * 30, y: hero.y + (i - 1) * 20,
+              vx: hero.vx * 1.2 + (i - 1) * 2, vy: hero.vy * 1.2,
+              radius: 12 + lvl, damage: 350 + lvl * 150, type: 'NINJA_CLONE', color: '#eab308', life: 0.8
+            });
+          }
+        } else if (hero.type === 'GUNMAN') {
+          for (let i = 0; i < 2 + lvl; i++) {
+            const angle = Math.atan2(hero.vy, hero.vx) + (Math.random() - 0.5) * 0.4;
+            this.projectiles.push({
+              x: hero.x, y: hero.y,
+              vx: Math.cos(angle) * 22, vy: Math.sin(angle) * 22,
+              radius: 6, damage: 250 + lvl * 120, type: 'BULLET', color: '#f97316', life: 2.0, bounces: 3
+            });
+          }
+        } else if (hero.type === 'SAMURAI') {
+          let closestBoss = this.enemies.find(e => e.hp > 0 && e.isBoss) || this.enemies.find(e => e.hp > 0);
+          if (closestBoss) {
+            hero.x = closestBoss.x + closestBoss.radius + 20;
+            hero.y = closestBoss.y - 10;
+            hero.vx = -12; hero.vy = -2;
+            this.screenShake = 16;
+            this.damageEnemy(closestBoss, 1200 + lvl * 500, closestBoss.x, closestBoss.y - closestBoss.weakY, true);
+          }
+        } else if (hero.type === 'SWORDSMAN') {
+          const spd = Math.hypot(hero.vx, hero.vy) || 14;
+          const angle = Math.atan2(hero.vy, hero.vx);
+          hero.vx = Math.cos(angle) * (spd + 14 + lvl * 4);
+          hero.vy = Math.sin(angle) * (spd + 14 + lvl * 4);
+          this.screenShake = 12;
+        } else if (hero.type === 'ARCHER') {
+          const arrowCount = 3 + lvl;
+          for (let i = 0; i < arrowCount; i++) {
+            const spreadAngle = (i - (arrowCount - 1) / 2) * 0.2;
+            const baseAngle = Math.atan2(hero.vy, hero.vx) + spreadAngle;
+            this.projectiles.push({
+              x: hero.x, y: hero.y, vx: Math.cos(baseAngle) * 18, vy: Math.sin(baseAngle) * 18,
+              radius: 5, damage: 250 + lvl * 120, type: 'ARROW', color: '#10b981', life: 1.5
+            });
+          }
+        } else if (hero.type === 'MAGE') {
+          const targetX = hero.x + hero.vx * 14;
+          const meteorCount = 1 + Math.floor(lvl / 2);
+          for (let i = 0; i < meteorCount; i++) {
+            this.projectiles.push({
+              x: targetX + (i - (meteorCount - 1) / 2) * 80, y: -100 - i * 30,
+              vx: 1.5, vy: 14 + lvl, radius: 25 + lvl * 2,
+              damage: 700 + lvl * 300, type: 'METEOR', color: '#f59e0b'
+            });
+          }
+        } else if (hero.type === 'LANCER') {
+          hero.vx = 10 + lvl; hero.vy = 18 + lvl * 2;
+          hero.lancerImpactPending = true;
+          this.screenShake = 10;
+        }
+      }
+
+      damageEnemy(enemy, damage, x, y, isWeakPoint = false) {
+        let finalDamage = damage;
+        if (isWeakPoint) {
+          finalDamage = Math.floor(damage * BALANCE_CONFIG.WEAK_POINT_MULTIPLIER);
+        }
+
+        enemy.hp = Math.max(0, enemy.hp - finalDamage);
+        if (finalDamage > this.maxDamageInStage) {
+          this.maxDamageInStage = finalDamage;
+        }
+
+        const formattedText = formatNumber(finalDamage);
+
+        if (isWeakPoint) {
+          this.sound.playCritical();
+          this.floatingTexts.push(new FloatingText(x, y - 30, `🎯WEAK! ${formattedText}`, '#fbbf24', 26, true));
+          this.screenShake = 14;
+        } else {
+          this.sound.playHit();
+          this.floatingTexts.push(new FloatingText(x, y - 20, `${formattedText}`, '#f43f5e', enemy.isBoss ? 24 : 18));
+        }
+
+        for (let i = 0; i < (isWeakPoint ? 16 : 8); i++) {
+          this.particles.push(new Particle(
+            x, y, isWeakPoint ? '#fbbf24' : enemy.color,
+            (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10,
+            Math.random() * 5 + 2, 0.5, isWeakPoint
+          ));
+        }
+
+        if (enemy.hp <= 0) {
+          this.sound.playCoin();
+          const coinCount = enemy.isBoss ? 12 : 4;
+          for (let i = 0; i < coinCount; i++) {
+            this.coinParticles.push(new CoinParticle(x, y, 60, 24));
+          }
+        }
+
+        this.updateBossBarUI();
+      }
+
+      triggerAutoAttackPhase() {
+        if (this.gameState === 'AUTO_ATTACKING' || this.gameState === 'RESULT') return;
+        this.gameState = 'AUTO_ATTACKING';
+        document.getElementById('phaseBanner').classList.remove('hidden');
+
+        let delay = 0;
+        this.landedKnights.forEach((knight) => {
+          setTimeout(() => {
+            if (!this.isPlaying) return;
+            let closestEnemy = null;
+            let minDist = 400;
+            this.enemies.forEach(e => {
+              if (e.hp <= 0) return;
+              const d = Math.hypot(e.x - knight.x, e.y - knight.y);
+              if (d < minDist) { minDist = d; closestEnemy = e; }
+            });
+
+            if (closestEnemy) {
+              this.sound.playAutoAttack();
+              const mult = knight.isBig ? 1.6 : 1.0;
+              const atkDmg = Math.floor((350 + (this.skillLevels[knight.type] || 1) * 150) * mult);
+              this.damageEnemy(closestEnemy, atkDmg, closestEnemy.x, closestEnemy.y - 10, false);
+            }
+          }, delay);
+          delay += 300;
+        });
+
+        setTimeout(() => {
+          if (!this.isPlaying) return;
+          document.getElementById('phaseBanner').classList.add('hidden');
+
+          this.keepPrincessAtLaunchPos();
+
+          if (this.enemies.every(e => e.hp <= 0)) {
+            const stg = STAGE_DEFINITIONS[this.currentStageIndex];
+            if (this.currentBattleIndex < stg.battles.length - 1) {
+              this.advanceToNextBattle();
+            } else {
+              this.finishStage(true);
+            }
+          } else if (this.partyQueue.length > 0) {
+            this.gameState = 'AIMING';
+          } else {
+            this.finishStage(false);
+          }
+        }, delay + 400);
+      }
+
+      advanceToNextBattle() {
+        this.currentBattleIndex++;
+        this.sound.playVictory();
+
+        this.gameState = 'MARCHING';
+        
+        const banner = document.getElementById('battleClearBanner');
+        if (banner) banner.classList.remove('hidden');
+
+        const stg = STAGE_DEFINITIONS[this.currentStageIndex];
+        const nextBattle = stg.battles[this.currentBattleIndex];
+        this.marchTargetX = nextBattle.battleX + 130;
+
+        this.landedKnights = [];
+        this.activeHero = null;
+      }
+
+      finishMarchingToNextBattle() {
+        const banner = document.getElementById('battleClearBanner');
+        if (banner) banner.classList.add('hidden');
+
+        this.loadCurrentBattleEnemies();
+        this.gameState = 'AIMING';
+
+        this.floatingTexts.push(new FloatingText(this.princessPos.x, this.groundY - 120, `BATTLE ${this.currentBattleIndex + 1} START!`, "#fbbf24", 28, true));
+      }
+
+      keepPrincessAtLaunchPos() {
+        if (!this.activeHero) return;
+        this.landedKnights.push(this.activeHero);
+        this.activeHero = null;
+      }
+
+      finishStage(isWin) {
+        this.isPlaying = false;
+        this.gameState = 'RESULT';
+        document.getElementById('skillPrompt').classList.add('hidden');
+        document.getElementById('phaseBanner').classList.add('hidden');
+
+        const titleEl = document.getElementById('resultTitle');
+        const subEl = document.getElementById('resultSubtitle');
+        const maxDmgEl = document.getElementById('modalMaxDmg');
+        const crownsEl = document.getElementById('modalCrownsEarned');
+        const bonusEl = document.getElementById('modalKickBonusText');
+        const coinsEl = document.getElementById('modalCoinsEarned');
+        const starContainer = document.getElementById('starContainer');
+
+        const currentStg = STAGE_DEFINITIONS[this.currentStageIndex];
+
+        if (isWin) {
+          this.sound.playVictory();
+          titleEl.innerText = "STAGE CLEAR!";
+          titleEl.className = "text-3xl font-black mb-1 text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-emerald-400 to-cyan-400";
+          subEl.innerText = "全BATTLEのモンスター軍団を完全撃破！";
+
+          let stars = 1;
+          if (this.stageCrownsEarned >= Math.ceil(this.totalCrownsInStage * 0.8)) stars++;
+          if (this.partyQueue.length >= 2) stars++;
+
+          this.stageStars[currentStg.id] = Math.max(this.stageStars[currentStg.id] || 0, stars);
+
+          starContainer.children[0].className = stars >= 1 ? "text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]" : "text-slate-700";
+          starContainer.children[1].className = stars >= 2 ? "text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]" : "text-slate-700";
+          starContainer.children[2].className = stars >= 3 ? "text-amber-300 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]" : "text-slate-700";
+
+          const kickBonus = this.partyQueue.length * 150;
+          this.coins += kickBonus;
+          this.stageCoinsEarned += kickBonus;
+          bonusEl.innerText = `+${kickBonus} 🪙 (${this.partyQueue.length}人残し)`;
+
+          if (this.currentStageIndex === this.unlockedStageIndex && this.unlockedStageIndex < STAGE_DEFINITIONS.length - 1) {
+            this.unlockedStageIndex++;
+          }
+        } else {
+          this.sound.playHit();
+          titleEl.innerText = "STAGE FAILED";
+          titleEl.className = "text-3xl font-black mb-1 text-transparent bg-clip-text bg-gradient-to-r from-rose-500 via-red-500 to-orange-500";
+          subEl.innerText = "出撃回数（残機）がなくなりました...";
+
+          starContainer.children[0].className = "text-slate-700";
+          starContainer.children[1].className = "text-slate-700";
+          starContainer.children[2].className = "text-slate-700";
+          bonusEl.innerText = "+0 🪙";
+        }
+
+        maxDmgEl.innerText = formatNumber(this.maxDamageInStage);
+        crownsEl.innerText = `👑 ${this.stageCrownsEarned} / ${this.totalCrownsInStage}`;
+        coinsEl.innerText = `+${this.stageCoinsEarned} 🪙`;
+
+        this.saveData();
+        this.updateGlobalUI();
+        document.getElementById('resultModal').classList.remove('hidden');
+      }
+
+      update(dt) {
+        if (!this.isPlaying) return;
+        if (this.screenShake > 0) this.screenShake = Math.max(0, this.screenShake - dt * 30);
+        if (this.kickAnimTimer > 0) this.kickAnimTimer -= dt;
+
+        if (this.gameState === 'MARCHING') {
+          const distToTarget = this.marchTargetX - this.princessPos.x;
+          if (distToTarget > 2) {
+            this.princessPos.x += distToTarget * 0.06;
+          } else {
+            this.princessPos.x = this.marchTargetX;
+            this.finishMarchingToNextBattle();
+          }
+          this.targetCameraX = this.princessPos.x - this.width * 0.25;
+        } else if (this.activeHero) {
+          this.targetCameraX = this.activeHero.x - this.width * 0.38;
+        } else {
+          this.targetCameraX = this.princessPos.x - this.width * 0.25;
+        }
+
+        this.targetCameraX = Math.max(0, Math.min(this.stageWidth - this.width, this.targetCameraX));
+        this.cameraX += (this.targetCameraX - this.cameraX) * 0.08;
+
+        const progressMarker = document.getElementById('heroProgressMarker');
+        if (progressMarker) {
+          const currentPos = this.activeHero ? this.activeHero.x : this.princessPos.x;
+          const ratio = Math.max(0, Math.min(1, currentPos / this.stageWidth));
+          progressMarker.style.left = `${ratio * 92}%`;
+        }
+
+        this.crowns.forEach(c => {
+          if (c.collected) return;
+          if (this.activeHero && Math.hypot(this.activeHero.x - c.x, this.activeHero.y - c.y) < this.activeHero.radius + c.radius) {
+            c.collected = true;
+            this.stageCrownsEarned++;
+            this.sound.playCrown();
+            this.floatingTexts.push(new FloatingText(c.x, c.y - 15, '👑 +1', '#fbbf24', 20));
+            document.getElementById('stageCrownsText').innerText = `${this.stageCrownsEarned} / ${this.totalCrownsInStage}`;
+          }
+        });
+
+        this.donuts.forEach(d => {
+          if (d.collected) return;
+          if (this.activeHero && Math.hypot(this.activeHero.x - d.x, this.activeHero.y - d.y) < this.activeHero.radius + d.radius) {
+            d.collected = true;
+            this.activeHero.isBig = true;
+            this.activeHero.radius *= 1.4;
+            this.sound.playDonut();
+            this.floatingTexts.push(new FloatingText(d.x, d.y - 20, '🍩 BIG UP!', '#f59e0b', 24, true));
+          }
+        });
+
+        if (this.activeHero && !this.activeHero.stopped) {
+          const hero = this.activeHero;
+          hero.flightTimer += dt;
+          hero.vy += this.gravity;
+          hero.x += hero.vx; hero.y += hero.vy;
+          hero.rotation += hero.vx * 0.06;
+
+          if (hero.hitCooldowns) {
+            for (const [enemy, timer] of hero.hitCooldowns.entries()) {
+              if (timer - dt <= 0) {
+                hero.hitCooldowns.delete(enemy);
+              } else {
+                hero.hitCooldowns.set(enemy, timer - dt);
+              }
+            }
+          }
+
+          hero.trail.push({ x: hero.x, y: hero.y });
+          if (hero.trail.length > 10) hero.trail.shift();
+
+          const stg = STAGE_DEFINITIONS[this.currentStageIndex];
+          const currentBattle = stg.battles[this.currentBattleIndex];
+          const minX = currentBattle.battleX + hero.radius;
+          const maxX = currentBattle.battleX + currentBattle.battleWidth - hero.radius;
+
+          if (hero.x < minX) {
+            hero.x = minX;
+            hero.vx = 0;
+          } else if (hero.x > maxX) {
+            hero.x = maxX;
+            hero.vx = 0;
+          }
+
+          if (hero.y - hero.radius < 0) {
+            hero.y = hero.radius;
+            hero.vy = 0;
+          }
+
+          if (hero.y + hero.radius >= this.groundY) {
+            hero.y = this.groundY - hero.radius;
+            hero.vy = 0;
+            hero.vx *= 0.82;
+
+            if (hero.type === 'LANCER' && hero.lancerImpactPending) {
+              this.screenShake = 16;
+              this.sound.playHit();
+              this.enemies.forEach(e => {
+                if (e.hp <= 0) return;
+                if (Math.abs(e.x - hero.x) < (hero.isBig ? 320 : 200)) {
+                  this.damageEnemy(e, 800 + (this.skillLevels.LANCER || 1) * 200, e.x, e.y - 10, false);
+                }
+              });
+              hero.lancerImpactPending = false;
+            }
+
+            if (Math.abs(hero.vx) < 0.2 && !hero.phaseTriggered) {
+              hero.vx = 0;
+              hero.stopped = true;
+              hero.phaseTriggered = true;
+              document.getElementById('skillPrompt').classList.add('hidden');
+              this.triggerAutoAttackPhase();
+            }
+          }
+
+          if (hero.flightTimer > 8.0 && !hero.phaseTriggered) {
+            hero.vx = 0; hero.vy = 0;
+            hero.stopped = true;
+            hero.phaseTriggered = true;
+            document.getElementById('skillPrompt').classList.add('hidden');
+            this.triggerAutoAttackPhase();
+          }
+
+          this.enemies.forEach(enemy => {
+            if (enemy.hp <= 0) return;
+            const dx = hero.x - enemy.x;
+            const dy = hero.y - enemy.y;
+            const dist = Math.hypot(dx, dy);
+            const minDist = hero.radius + enemy.radius;
+
+            if (dist < minDist && dist > 0) {
+              const nx = dx / dist, ny = dy / dist;
+              const overlap = minDist - dist;
+              hero.x += nx * overlap; hero.y += ny * overlap;
+
+              const isCoolingDown = hero.hitCooldowns && hero.hitCooldowns.has(enemy);
+
+              if (!isCoolingDown) {
+                const spd = Math.hypot(hero.vx, hero.vy);
+                const baseDmg = Math.floor((spd * 25 + 150) * (hero.isBig ? 1.5 : 1.0));
+                const isWeakHit = Math.hypot(hero.x - enemy.x, hero.y - (enemy.y + enemy.weakY)) < 24;
+
+                this.damageEnemy(enemy, baseDmg, hero.x, hero.y, isWeakHit);
+
+                hero.hitCooldowns.set(enemy, 0.35);
+
+                hero.vx *= 0.7;
+                hero.vy *= 0.7;
+              }
+            }
+          });
+        }
+
+        this.projectiles.forEach((p) => {
+          if (p.type === 'METEOR') {
+            p.x += p.vx; p.y += p.vy;
+            if (p.y + p.radius >= this.groundY) {
+              this.sound.playHit();
+              this.screenShake = 18;
+              this.enemies.forEach(e => {
+                if (e.hp <= 0) return;
+                if (Math.hypot(p.x - e.x, p.y - e.y) < 220) {
+                  this.damageEnemy(e, p.damage, e.x, e.y);
+                }
+              });
+              p.dead = true;
+            }
+          } else if (p.type === 'BULLET') {
+            p.x += p.vx; p.y += p.vy; p.life -= dt;
+            if (p.y <= 0 || p.y >= this.groundY) { p.vy *= -1; p.bounces--; }
+            this.enemies.forEach(e => {
+              if (e.hp <= 0) return;
+              if (Math.hypot(p.x - e.x, p.y - e.y) < e.radius + p.radius) {
+                this.damageEnemy(e, p.damage, p.x, p.y, false);
+              }
+            });
+            if (p.life <= 0 || p.bounces < 0) p.dead = true;
+          } else if (p.type === 'NINJA_CLONE') {
+            p.x += p.vx; p.y += p.vy; p.life -= dt;
+            this.enemies.forEach(e => {
+              if (e.hp <= 0) return;
+              if (Math.hypot(p.x - e.x, p.y - e.y) < e.radius + p.radius) {
+                this.damageEnemy(e, p.damage, p.x, p.y, true);
+              }
+            });
+            if (p.life <= 0) p.dead = true;
+          } else if (p.type === 'ARROW') {
+            p.x += p.vx; p.y += p.vy; p.life -= dt;
+            this.enemies.forEach(e => {
+              if (e.hp <= 0) return;
+              if (Math.hypot(p.x - e.x, p.y - e.y) < e.radius + p.radius) {
+                const isWeak = Math.hypot(p.x - e.x, p.y - (e.y + e.weakY)) < 24;
+                this.damageEnemy(e, p.damage, p.x, p.y, isWeak);
+                p.life = 0;
+              }
+            });
+            if (p.life <= 0) p.dead = true;
+          }
+        });
+        this.projectiles = this.projectiles.filter(p => !p.dead);
+
+        this.particles.forEach(p => p.update(dt));
+        this.particles = this.particles.filter(p => p.life > 0);
+
+        this.coinParticles.forEach(c => {
+          c.update(dt);
+          if (c.arrived) {
+            this.coins += BALANCE_CONFIG.BASE_COIN_REWARD;
+            this.stageCoinsEarned += BALANCE_CONFIG.BASE_COIN_REWARD;
+            this.sound.playCoin();
+            this.updateGlobalUI();
+            this.saveData();
+          }
+        });
+        this.coinParticles = this.coinParticles.filter(c => !c.arrived);
+
+        this.floatingTexts.forEach(ft => ft.update(dt));
+        this.floatingTexts = this.floatingTexts.filter(ft => ft.life > 0);
+      }
+
+      drawPrincess(x, y, isKicking) {
+        this.ctx.save();
+        this.ctx.translate(x, y);
+        this.ctx.shadowColor = '#f43f5e';
+        this.ctx.shadowBlur = 16;
+
+        this.ctx.fillStyle = '#f43f5e';
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -10); this.ctx.lineTo(-18, 25); this.ctx.lineTo(18, 25);
+        this.ctx.closePath(); this.ctx.fill();
+
+        this.ctx.fillStyle = '#fbbf24';
+        this.ctx.beginPath(); this.ctx.arc(0, -22, 14, 0, Math.PI * 2); this.ctx.fill();
+
+        this.ctx.fillStyle = '#fde047';
+        this.ctx.beginPath(); this.ctx.arc(0, -20, 10, 0, Math.PI * 2); this.ctx.fill();
+
+        this.ctx.fillStyle = '#f59e0b';
+        this.ctx.beginPath();
+        this.ctx.moveTo(-8, -32); this.ctx.lineTo(-10, -42);
+        this.ctx.lineTo(-3, -36); this.ctx.lineTo(0, -45);
+        this.ctx.lineTo(3, -36); this.ctx.lineTo(10, -42);
+        this.ctx.lineTo(8, -32);
+        this.ctx.closePath(); this.ctx.fill();
+
+        this.ctx.strokeStyle = '#f43f5e';
+        this.ctx.lineWidth = 5;
+        this.ctx.lineCap = 'round';
+        this.ctx.beginPath();
+        if (isKicking) {
+          this.ctx.moveTo(5, 10); this.ctx.lineTo(26, -5);
+        } else if (this.isDragging) {
+          this.ctx.moveTo(-5, 10); this.ctx.lineTo(-20, 18);
+        } else {
+          this.ctx.moveTo(0, 15); this.ctx.lineTo(0, 25);
+        }
+        this.ctx.stroke();
+        this.ctx.restore();
+      }
+
+      render() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctx.save();
+
+        if (this.screenShake > 0) {
+          this.ctx.translate((Math.random() - 0.5) * this.screenShake, (Math.random() - 0.5) * this.screenShake);
+        }
+
+        const skyGrad = this.ctx.createLinearGradient(0, 0, 0, this.height);
+        skyGrad.addColorStop(0, '#020617');
+        skyGrad.addColorStop(0.6, '#0f172a');
+        skyGrad.addColorStop(1, '#1e1b4b');
+        this.ctx.fillStyle = skyGrad;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+
+        this.ctx.save();
+        this.ctx.translate(-Math.floor(this.cameraX), 0);
+
+        this.ctx.fillStyle = '#090d16';
+        this.ctx.fillRect(0, this.groundY, this.stageWidth + 400, this.height - this.groundY);
+
+        const groundGrad = this.ctx.createLinearGradient(0, this.groundY, this.stageWidth, this.groundY);
+        groundGrad.addColorStop(0, '#ec4899');
+        groundGrad.addColorStop(0.5, '#8b5cf6');
+        groundGrad.addColorStop(1, '#3b82f6');
+        this.ctx.strokeStyle = groundGrad;
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, this.groundY);
+        this.ctx.lineTo(this.stageWidth + 400, this.groundY);
+        this.ctx.stroke();
+
+        const goalX = this.stageWidth - 150;
+        this.ctx.save();
+        this.ctx.strokeStyle = '#cbd5e1';
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(goalX, this.groundY);
+        this.ctx.lineTo(goalX, this.groundY - 120);
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = '#f43f5e';
+        this.ctx.beginPath();
+        this.ctx.moveTo(goalX, this.groundY - 120);
+        this.ctx.lineTo(goalX + 45, this.groundY - 100);
+        this.ctx.lineTo(goalX, this.groundY - 80);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.restore();
+
+        if (this.isPlaying) {
+          this.crowns.forEach(c => {
+            if (c.collected) return;
+            this.ctx.save();
+            this.ctx.font = '24px sans-serif';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('👑', c.x, c.y + 8);
+            this.ctx.restore();
+          });
+
+          this.donuts.forEach(d => {
+            if (d.collected) return;
+            this.ctx.save();
+            this.ctx.font = '28px sans-serif';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('🍩', d.x, d.y + 10);
+            this.ctx.restore();
+          });
+
+          if (this.isDragging) {
+            const dx = this.dragStart.x - this.dragCurrent.x, dy = this.dragStart.y - this.dragCurrent.y;
+            const dist = Math.min(Math.hypot(dx, dy), this.maxPullRadius);
+            const angle = Math.atan2(dy, dx), speed = dist * 0.23;
+
+            let simX = this.princessPos.x, simY = this.princessPos.y, simVx = Math.cos(angle) * speed, simVy = Math.sin(angle) * speed;
+            this.ctx.fillStyle = 'rgba(244, 63, 94, 0.85)';
+            for (let i = 0; i < 32; i++) {
+              simVy += this.gravity; simX += simVx; simY += simVy;
+              if (simY >= this.groundY) break;
+              this.ctx.beginPath(); this.ctx.arc(simX, simY, 4.5, 0, Math.PI * 2); this.ctx.fill();
+            }
+          }
+
+          this.drawPrincess(this.princessPos.x, this.princessPos.y, this.kickAnimTimer > 0);
+
+          this.landedKnights.forEach(hero => {
+            this.ctx.save();
+            const hClass = HERO_CLASSES[hero.type];
+            this.ctx.shadowColor = hClass.color;
+            this.ctx.shadowBlur = 12;
+            this.ctx.fillStyle = hClass.color;
+            this.ctx.beginPath();
+            this.ctx.arc(hero.x, hero.y, hero.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.ctx.font = hero.isBig ? '26px sans-serif' : '16px sans-serif';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(hClass.icon, hero.x, hero.y + (hero.isBig ? 9 : 6));
+            this.ctx.restore();
+          });
+
+          if (this.activeHero) {
+            const hero = this.activeHero;
+            const hClass = HERO_CLASSES[hero.type];
+
+            hero.trail.forEach((t, i) => {
+              this.ctx.fillStyle = hClass.glowColor;
+              this.ctx.globalAlpha = (i / hero.trail.length) * 0.4;
+              this.ctx.beginPath();
+              this.ctx.arc(t.x, t.y, hero.radius * (i / hero.trail.length), 0, Math.PI * 2);
+              this.ctx.fill();
+            });
+            this.ctx.globalAlpha = 1.0;
+
+            this.ctx.save();
+            this.ctx.shadowColor = hClass.color;
+            this.ctx.shadowBlur = 18;
+            this.ctx.fillStyle = hClass.color;
+            this.ctx.beginPath();
+            this.ctx.arc(hero.x, hero.y, hero.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.ctx.font = hero.isBig ? '28px sans-serif' : '18px sans-serif';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(hClass.icon, hero.x, hero.y + (hero.isBig ? 10 : 6));
+            this.ctx.restore();
+          }
+
+          this.enemies.forEach(enemy => {
+            if (enemy.hp <= 0) return;
+            this.ctx.save();
+
+            const enemyGrad = this.ctx.createRadialGradient(enemy.x - 5, enemy.y - 5, 2, enemy.x, enemy.y, enemy.radius);
+            enemyGrad.addColorStop(0, enemy.isInvasion ? '#d8b4fe' : '#f87171');
+            enemyGrad.addColorStop(1, enemy.color);
+            this.ctx.fillStyle = enemyGrad;
+
+            this.ctx.shadowColor = enemy.color;
+            this.ctx.shadowBlur = enemy.isBoss ? 24 : 10;
+            this.ctx.beginPath();
+            this.ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.restore();
+
+            this.ctx.save();
+            this.ctx.font = '14px sans-serif';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('🎯', enemy.x, enemy.y + enemy.weakY);
+            this.ctx.restore();
+
+            const bw = enemy.radius * 2.4, bh = 7, bx = enemy.x - bw / 2, by = enemy.y - enemy.radius - 14;
+            this.ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            this.ctx.fillRect(bx, by, bw, bh);
+
+            const hpRatio = enemy.hp / enemy.maxHp;
+            this.ctx.fillStyle = hpRatio > 0.4 ? '#10b981' : '#ef4444';
+            this.ctx.fillRect(bx, by, bw * hpRatio, bh);
+          });
+
+          this.projectiles.forEach(p => {
+            this.ctx.save();
+            this.ctx.shadowColor = p.color;
+            this.ctx.shadowBlur = 18;
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.restore();
+          });
+
+          this.coinParticles.forEach(c => c.draw(this.ctx));
+          this.particles.forEach(p => p.draw(this.ctx));
+          this.floatingTexts.forEach(ft => ft.draw(this.ctx));
+        }
+
+        this.ctx.restore();
+        this.ctx.restore();
+      }
+
+      loop(timestamp) {
+        const dt = Math.min((timestamp - this.lastTime) / 1000, 0.1);
+        this.lastTime = timestamp;
+        this.update(dt);
+        this.render();
+        requestAnimationFrame((t) => this.loop(t));
+      }
+    }
+
+    window.onload = () => new KeriHimeGame();
+  </script>
+</body>
+</html>
